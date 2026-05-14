@@ -88,20 +88,20 @@ once, so the loop bound for the implementation matches `bluntifySteps`
     `Array.map` over segments touches each input element exactly once. -/
 @[simp] theorem bluntify_segments_size (g : Gfa) (k : Nat) :
     (bluntify g k).segments.size = g.segments.size := by
-  unfold bluntify
+  unfold bluntify bluntifyVar
   simp
 
 /-- The output graph has the same number of links as the input. The
     `Array.map` over links touches each input element exactly once. -/
 @[simp] theorem bluntify_links_size (g : Gfa) (k : Nat) :
     (bluntify g k).links.size = g.links.size := by
-  unfold bluntify
+  unfold bluntify bluntifyVar
   simp
 
 /-- The output graph has the same number of paths as the input. -/
 @[simp] theorem bluntify_paths_size (g : Gfa) (k : Nat) :
     (bluntify g k).paths.size = g.paths.size := by
-  unfold bluntify
+  unfold bluntify bluntifyVar
   simp
 
 /-- Bluntifying preserves the headline complexity input: the step count is

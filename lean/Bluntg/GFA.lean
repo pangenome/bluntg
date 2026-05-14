@@ -162,21 +162,64 @@ def write (g : Gfa) : String :=
       • to_o   = '+': uses B's *left*  end (prefix of B's sequence)
       • to_o   = '-': uses B's *right* end (suffix of B's sequence)
 
-  A segment's left end is trimmed by `(k-1)/2` if *any* edge in the graph
-  touches that end (regardless of in/out direction). Likewise the right
-  end is trimmed by `k/2` if any edge touches it. For odd `k` these are
-  equal; for even `k` they differ and the connector-node fix-up applies
-  (not yet implemented at the GFA level). -/
+  **Variable per-edge overlap.** Each `L` line carries its own `overlap`
+  field. For an edge with overlap `o`, the bluntify trims the source's
+  contributing side by `(o + 1) / 2` and the target's contributing side
+  by `o / 2`. These two halves sum to `o` exactly, so removing them from
+  both endpoints together strips the entire overlap region from the
+  junction. When a segment side has multiple incident edges (e.g. one
+  side of a hub node connects to several others with different overlap
+  lengths), we aggregate by `max`: the side is trimmed enough to cover
+  every incident edge's half. For uniform-`k` inputs (every L line has
+  the same `overlap = k - 1`), max-aggregation collapses to the constant
+  `(k-1)/2` / `k/2` trim of the original fixed-`k` algorithm — making
+  the new code byte-identical on those inputs (see §5.1 of
+  DESIGN-overlaps.md).
 
-/-- Set of segment IDs whose **right** end (= `+` side) has at least one
-    edge incident in the graph. -/
+  See `DESIGN-overlaps.md §2-§3` for the design rationale; see
+  `Bluntg.VarOverlap` for the verified Lean correctness theorem under
+  the per-side max-aggregation model. -/
+
+/-- Update a hashmap entry to the `max` of its current value (or 0 if
+    absent) and the supplied amount. Used by `rightOverlap`/`leftOverlap`
+    to aggregate per-edge halves into a per-segment-side trim amount. -/
+def mapMaxInsert (m : HashMap String Nat) (k : String) (v : Nat) :
+    HashMap String Nat :=
+  match m.get? k with
+  | some old => m.insert k (Nat.max old v)
+  | none     => m.insert k v
+
+/-- Per-segment **right-side trim amount**: the largest `(o+1)/2` over
+    all L lines incident at that segment's right end. A right-incident
+    edge is one whose `from` end is `+` (uses the source's right side)
+    or whose `to` end is `-` (uses the target's right side). Absent ⇒
+    no edge ⇒ no trim. -/
+def rightOverlap (g : Gfa) : HashMap String Nat :=
+  g.links.foldl (init := (∅ : HashMap String Nat)) (fun acc l =>
+    let amt := (l.overlap + 1) / 2
+    let acc := if l.fromPlus then mapMaxInsert acc l.fromId amt else acc
+    if !l.toPlus then mapMaxInsert acc l.toId amt else acc)
+
+/-- Per-segment **left-side trim amount**: the largest `o/2` over all L
+    lines incident at that segment's left end. Absent ⇒ no edge ⇒ no
+    trim. -/
+def leftOverlap (g : Gfa) : HashMap String Nat :=
+  g.links.foldl (init := (∅ : HashMap String Nat)) (fun acc l =>
+    let amt := l.overlap / 2
+    let acc := if !l.fromPlus then mapMaxInsert acc l.fromId amt else acc
+    if l.toPlus then mapMaxInsert acc l.toId amt else acc)
+
+/-- *Legacy* set of segment IDs whose right end has at least one edge
+    incident. Used by `EvenK.lean` (the connector-node fix-up needs the
+    "is this side edged?" bit, not the trim amount, when it builds
+    connectors). -/
 def rightSideIds (g : Gfa) : HashSet String :=
   g.links.foldl (fun acc l =>
     let acc := if l.fromPlus then acc.insert l.fromId else acc
     if !l.toPlus then acc.insert l.toId else acc) ∅
 
-/-- Set of segment IDs whose **left** end (= `-` side) has at least one
-    edge incident in the graph. -/
+/-- *Legacy* set of segment IDs whose left end has at least one edge
+    incident. -/
 def leftSideIds (g : Gfa) : HashSet String :=
   g.links.foldl (fun acc l =>
     let acc := if !l.fromPlus then acc.insert l.fromId else acc
@@ -188,28 +231,39 @@ def trimSeq (seq : String) (lt rt : Nat) : String :=
   let body := chars.drop lt
   String.ofList (body.take (len - lt - rt))
 
-/-- Bluntify a (possibly bidirected) GFA. Trims each segment by `(k-1)/2`
-    on its left end and `k/2` on its right end when those ends carry any
-    edge; all link/path overlap CIGARs become `0M`.
+/-- **Variable-overlap bluntify.** Trims each segment by its computed
+    per-side amount: `leftOverlap[s]` chars from the left if any
+    left-incident edge exists, `rightOverlap[s]` chars from the right if
+    any right-incident edge exists. All link and path overlap CIGARs
+    become `0M`. This is the directed bluntify: correct for any per-edge
+    overlap on opposite-side edges (`+ +` / `- -`). Same-side bidirected
+    edges (`+ -` / `- +`) with even overlap need a connector node — see
+    `Bluntg/EvenK.lean`.
 
-    This is the *directed* bluntify: correct for odd `k`, and correct for
-    even `k` on opposite-side (`+ +` / `- -`) edges. For full even-`k`
-    correctness on bidirected graphs use `Bluntg.bluntifyGfa` (declared
-    in `Bluntg/EvenK.lean`), which dispatches through `addConnectors`
-    when `k` is even. -/
-def bluntify (g : Gfa) (k : Nat) : Gfa :=
-  let rights := rightSideIds g
-  let lefts  := leftSideIds  g
-  let leftAmt   := (k - 1) / 2
-  let rightAmt  := k / 2
+    On uniform-`k` inputs (every L line has `overlap = k - 1`), this
+    function reduces to the original constant-`k` trim: every right side
+    gets `(k-1+1)/2 = k/2` and every left side gets `(k-1)/2`, exactly
+    as before. -/
+def bluntifyVar (g : Gfa) : Gfa :=
+  let rights := rightOverlap g
+  let lefts  := leftOverlap  g
   let newSegments := g.segments.map fun s =>
-    let l := if lefts.contains  s.id then leftAmt  else 0
-    let r := if rights.contains s.id then rightAmt else 0
+    let l := lefts.getD  s.id 0
+    let r := rights.getD s.id 0
     { s with seq := trimSeq s.seq l r }
   let newLinks := g.links.map fun l => { l with overlap := 0 }
   let newPaths := g.paths.map fun p =>
     { p with overlaps := p.overlaps.map (fun _ => 0) }
   { segments := newSegments, links := newLinks, paths := newPaths }
+
+/-- *Backward-compatible* fixed-`k` bluntify. Calls `bluntifyVar`
+    internally; the `k` argument is kept for the existing odd-`k` /
+    even-`k` dispatch in `EvenK.lean` (which still needs `k` for the
+    *uniform* case) and for the `Complexity.lean` step-count lemmas
+    that assert per-segment / per-link work. With per-edge overlap
+    in the input, the value of `k` is irrelevant — the trims are
+    derived from the links themselves. -/
+def bluntify (g : Gfa) (_k : Nat) : Gfa := bluntifyVar g
 
 /-- Alias for `bluntify` — the connector-aware wrapper in
     `Bluntg/EvenK.lean` calls into this for the odd-`k` branch. -/

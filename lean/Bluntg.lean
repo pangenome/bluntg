@@ -9,3 +9,4 @@ import Bluntg.Bidirected
 import Bluntg.EvenK
 import Bluntg.Complexity
 import Bluntg.Unify
+import Bluntg.VarOverlap
