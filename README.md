@@ -23,6 +23,8 @@ the proof source. The headline theorems:
 | `bluntSpell_eq_middle_spell` | for any walk `vs` in `G`, the bluntified spelling equals `middle (spell vs) (leftTrim vs.head) (rightTrim vs.last)` |
 | `bluntSpell_eq_spell_of_boundary` | when the walk starts at a node with no incoming edge and ends at a node with no outgoing edge, the spellings are *equal* |
 | `middle_concat_overlap` | the key list-arithmetic identity for sandwich+overlap composition |
+| `rewriteAligned_spell_preserved` | a single `unify` merge of a `u + v +` chain preserves the spelling of every safe path with zero overlaps |
+| `Path.unifyRewrite_spell` | the same preservation lifted to `Path` and `Gfa.pathSpell` |
 
 `Bluntg/Bidirected.lean` defines the bidirected layer (`Orient`,
 `BidirectedDeBruijnGraph` with the side-aware overlap invariant) and
@@ -43,13 +45,17 @@ Not yet wired up:
 ```bash
 # Build everything
 cargo build --release            # Rust: gen-gfa test-input generator
-(cd lean && lake build)          # Lean:  bluntg executable + library
+(cd lean && lake build)          # Lean:  bluntg + unify executables + library
 
 # Generate a De Bruijn graph from a FASTA (also accepts .gz / .bgz)
 ./target/release/gen-gfa 31 data/yeast.chrV.fa.gz > yeast.k31.gfa
 
 # Bluntify (reads stdin, writes stdout; k inferred from first L overlap)
 ./lean/.lake/build/bin/bluntg < yeast.k31.gfa > yeast.k31.blunt.gfa
+
+# Optional: collapse simple +/+ chains. For yeast chrV this reduces
+# ~890k segments to ~24k while leaving every P line's spelling unchanged.
+./lean/.lake/build/bin/unify < yeast.k31.blunt.gfa > yeast.k31.unified.gfa
 ```
 
 `gen-gfa` emits one `S` line per distinct k-mer (numbered `1..`), one
@@ -79,13 +85,15 @@ fix-up is needed before bluntify (not yet plumbed at the GFA level).
     ├── lakefile.toml
     ├── lean-toolchain
     ├── Main.lean               # bluntg executable entry point
+    ├── MainUnify.lean          # unify executable entry point
     └── Bluntg/
         ├── Basic.lean          # list helpers (prefix / suffix / middle)
         ├── Graph.lean          # DeBruijnGraph structure, walks, spelling
         ├── Bluntify.lean       # bluntify function + bluntSpell
         ├── Correctness.lean    # path-preservation theorems
         ├── Bidirected.lean     # bidirected layer + doubling
-        └── GFA.lean            # GFA1 parser / printer / bluntify-on-records
+        ├── GFA.lean            # GFA1 parser / printer / bluntify-on-records
+        └── Unify.lean          # unitig compaction + path-preservation proof
 ```
 
 ## Status of "is this stark in Lean 4?"
@@ -98,8 +106,8 @@ Not yet done relative to stark:
 - bidirected GFA edges with `-` orientations are passed through but not
   treated bidirectionally;
 - the even-`k` connector-node fix-up isn't applied;
-- `unify` (unitig compaction) and `merge_nodes` (partial node merges)
-  aren't ported.
+- `merge_nodes` (partial node merges) isn't ported. `unify` (unitig
+  compaction) is ported with a machine-checked path-preservation proof.
 
 A native-Rust port is planned for parity-with-stark performance; the
 Lean library will continue to serve as the correctness reference.

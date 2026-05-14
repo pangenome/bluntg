@@ -1,6 +1,6 @@
 name = "Bluntg"
 version = "0.1.0"
-defaultTargets = ["Bluntg", "bluntg"]
+defaultTargets = ["Bluntg", "bluntg", "unify"]
 
 [[lean_lib]]
 name = "Bluntg"
@@ -8,3 +8,7 @@ name = "Bluntg"
 [[lean_exe]]
 name = "bluntg"
 root = "Main"
+
+[[lean_exe]]
+name = "unify"
+root = "MainUnify"
