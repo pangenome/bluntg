@@ -170,19 +170,19 @@ def write (g : Gfa) : String :=
 
 /-- Set of segment IDs whose **right** end (= `+` side) has at least one
     edge incident in the graph. -/
-private def rightSideIds (g : Gfa) : HashSet String :=
+def rightSideIds (g : Gfa) : HashSet String :=
   g.links.foldl (fun acc l =>
     let acc := if l.fromPlus then acc.insert l.fromId else acc
     if !l.toPlus then acc.insert l.toId else acc) ∅
 
 /-- Set of segment IDs whose **left** end (= `-` side) has at least one
     edge incident in the graph. -/
-private def leftSideIds (g : Gfa) : HashSet String :=
+def leftSideIds (g : Gfa) : HashSet String :=
   g.links.foldl (fun acc l =>
     let acc := if !l.fromPlus then acc.insert l.fromId else acc
     if l.toPlus then acc.insert l.toId else acc) ∅
 
-private def trimSeq (seq : String) (lt rt : Nat) : String :=
+def trimSeq (seq : String) (lt rt : Nat) : String :=
   let chars := seq.toList
   let len := chars.length
   let body := chars.drop lt
@@ -190,7 +190,13 @@ private def trimSeq (seq : String) (lt rt : Nat) : String :=
 
 /-- Bluntify a (possibly bidirected) GFA. Trims each segment by `(k-1)/2`
     on its left end and `k/2` on its right end when those ends carry any
-    edge; all link/path overlap CIGARs become `0M`. -/
+    edge; all link/path overlap CIGARs become `0M`.
+
+    This is the *directed* bluntify: correct for odd `k`, and correct for
+    even `k` on opposite-side (`+ +` / `- -`) edges. For full even-`k`
+    correctness on bidirected graphs use `Bluntg.bluntifyGfa` (declared
+    in `Bluntg/EvenK.lean`), which dispatches through `addConnectors`
+    when `k` is even. -/
 def bluntify (g : Gfa) (k : Nat) : Gfa :=
   let rights := rightSideIds g
   let lefts  := leftSideIds  g
@@ -204,6 +210,10 @@ def bluntify (g : Gfa) (k : Nat) : Gfa :=
   let newPaths := g.paths.map fun p =>
     { p with overlaps := p.overlaps.map (fun _ => 0) }
   { segments := newSegments, links := newLinks, paths := newPaths }
+
+/-- Alias for `bluntify` — the connector-aware wrapper in
+    `Bluntg/EvenK.lean` calls into this for the odd-`k` branch. -/
+abbrev bluntifyDirected (g : Gfa) (k : Nat) : Gfa := bluntify g k
 
 def inferK (g : Gfa) : Nat :=
   if h : g.links.size > 0 then

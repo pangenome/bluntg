@@ -6,4 +6,5 @@ import Bluntg.Bluntify
 import Bluntg.Correctness
 import Bluntg.GFA
 import Bluntg.Bidirected
+import Bluntg.EvenK
 import Bluntg.Complexity

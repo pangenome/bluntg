@@ -23,6 +23,6 @@ def main (args : List String) : IO UInt32 := do
   if k < 2 then
     IO.eprintln s!"bluntg: refusing to run with k = {k} (need k ≥ 2)"
     return 2
-  let blunted := GFA.bluntify gfa k
+  let blunted := bluntifyGfa gfa k
   stdout.putStr (GFA.write blunted)
   return 0
