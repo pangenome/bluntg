@@ -1,0 +1,10 @@
+name = "Bluntg"
+version = "0.1.0"
+defaultTargets = ["Bluntg", "bluntg"]
+
+[[lean_lib]]
+name = "Bluntg"
+
+[[lean_exe]]
+name = "bluntg"
+root = "Main"
