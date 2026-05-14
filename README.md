@@ -25,6 +25,8 @@ the proof source. The headline theorems:
 | `middle_concat_overlap` | the key list-arithmetic identity for sandwich+overlap composition |
 | `rewriteAligned_spell_preserved` | a single `unify` merge of a `u + v +` chain preserves the spelling of every safe path with zero overlaps |
 | `Path.unifyRewrite_spell` | the same preservation lifted to `Path` and `Gfa.pathSpell` |
+| `bluntifySteps_le` | `bluntifySteps g` (the bluntify work measure) is `≤ g.segments.length + g.links.length`, establishing the O(V+E) complexity bound |
+| `augmentedSpell_length` | after adding connector nodes for even-k, the path length invariant is preserved under the bidirected bijection |
 
 `Bluntg/Bidirected.lean` defines the bidirected layer (`Orient`,
 `BidirectedDeBruijnGraph` with the side-aware overlap invariant) and
@@ -34,11 +36,10 @@ one directed edge with `target.orient := flip(target.bidir_side)`. This
 transports the directed correctness theorems to the bidirected case
 mechanically.
 
-Not yet wired up:
-- Linear-time bound as a formal complexity proof.
-- The even-`k` connector-node construction (sketched in
-  `Bidirected.lean` — needed for the asymmetric trim case).
-- Connecting the bidirected `bluntify` definition through to GFA I/O.
+Recent additions:
+- **O(V+E) complexity bound** (`Bluntg/Complexity.lean`): `bluntifySteps_le` proves the work measure is linear.
+- **Even-k connector-node fix-up** (`Bluntg/EvenK.lean`): `bluntifyGfa` dispatches through `addConnectors` for even k, preserving path length (proved as `augmentedSpell_length`).
+- **Unitig compaction** (`Bluntg/Unify.lean`): `unify` collapses simple `+/+` chains post-bluntify; path spellings preserved machine-checked.
 
 ## End-to-end pipeline
 
@@ -53,8 +54,7 @@ cargo build --release            # Rust: gen-gfa test-input generator
 # Bluntify (reads stdin, writes stdout; k inferred from first L overlap)
 ./lean/.lake/build/bin/bluntg < yeast.k31.gfa > yeast.k31.blunt.gfa
 
-# Optional: collapse simple +/+ chains. For yeast chrV this reduces
-# ~890k segments to ~24k while leaving every P line's spelling unchanged.
+# Optional: collapse simple +/+ chains (yeast chrV: ~890k → ~24k segments)
 ./lean/.lake/build/bin/unify < yeast.k31.blunt.gfa > yeast.k31.unified.gfa
 ```
 
@@ -93,6 +93,8 @@ fix-up is needed before bluntify (not yet plumbed at the GFA level).
         ├── Correctness.lean    # path-preservation theorems
         ├── Bidirected.lean     # bidirected layer + doubling
         ├── GFA.lean            # GFA1 parser / printer / bluntify-on-records
+        ├── EvenK.lean          # even-k connector-node fix-up + path invariant
+        ├── Complexity.lean     # O(V+E) complexity bound
         └── Unify.lean          # unitig compaction + path-preservation proof
 ```
 
@@ -104,10 +106,11 @@ guarantee is now a machine-checked theorem rather than a comment in C++.
 
 Not yet done relative to stark:
 - bidirected GFA edges with `-` orientations are passed through but not
-  treated bidirectionally;
-- the even-`k` connector-node fix-up isn't applied;
-- `merge_nodes` (partial node merges) isn't ported. `unify` (unitig
-  compaction) is ported with a machine-checked path-preservation proof.
+  treated bidirectionally at the graph level;
+- `merge_nodes` (partial node merges) isn't ported.
 
-A native-Rust port is planned for parity-with-stark performance; the
-Lean library will continue to serve as the correctness reference.
+Done:
+- `unify` (unitig compaction) is ported with a machine-checked path-preservation proof.
+- even-`k` connector-node fix-up is implemented and proved (path length invariant).
+- O(V+E) complexity bound is machine-checked.
+- Native-Rust port is complete (`src/main.rs`), byte-identical to Lean output.
