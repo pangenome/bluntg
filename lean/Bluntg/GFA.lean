@@ -163,11 +163,13 @@ def write (g : Gfa) : String :=
       • to_o   = '-': uses B's *right* end (suffix of B's sequence)
 
   **Variable per-edge overlap.** Each `L` line carries its own `overlap`
-  field. For an edge with overlap `o`, the bluntify trims the source's
-  contributing side by `(o + 1) / 2` and the target's contributing side
-  by `o / 2`. These two halves sum to `o` exactly, so removing them from
-  both endpoints together strips the entire overlap region from the
-  junction. When a segment side has multiple incident edges (e.g. one
+  field. For an edge with overlap `o`, the bluntify trims **each**
+  contributing side by `(o + 1) / 2`. The two halves sum to `o` (even
+  `o`) or `o + 1` (odd `o`), so removing them strips at least the entire
+  overlap region from every junction regardless of link orientation. The
+  symmetric ceil is required for bidirected safety: a floor/ceil split
+  by physical side under-trims `- +` links with odd `o` by one base.
+  When a segment side has multiple incident edges (e.g. one
   side of a hub node connects to several others with different overlap
   lengths), we aggregate by `max`: the side is trimmed enough to cover
   every incident edge's half. For uniform-`k` inputs (every L line has
@@ -200,12 +202,12 @@ def rightOverlap (g : Gfa) : HashMap String Nat :=
     let acc := if l.fromPlus then mapMaxInsert acc l.fromId amt else acc
     if !l.toPlus then mapMaxInsert acc l.toId amt else acc)
 
-/-- Per-segment **left-side trim amount**: the largest `o/2` over all L
-    lines incident at that segment's left end. Absent ⇒ no edge ⇒ no
-    trim. -/
+/-- Per-segment **left-side trim amount**: the largest `(o+1)/2` over
+    all L lines incident at that segment's left end. Absent ⇒ no edge ⇒
+    no trim. -/
 def leftOverlap (g : Gfa) : HashMap String Nat :=
   g.links.foldl (init := (∅ : HashMap String Nat)) (fun acc l =>
-    let amt := l.overlap / 2
+    let amt := (l.overlap + 1) / 2
     let acc := if !l.fromPlus then mapMaxInsert acc l.fromId amt else acc
     if l.toPlus then mapMaxInsert acc l.toId amt else acc)
 

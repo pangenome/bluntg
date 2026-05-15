@@ -154,7 +154,10 @@ fn right_overlap_map(gfa: &Gfa) -> HashMap<String, usize> {
 fn left_overlap_map(gfa: &Gfa) -> HashMap<String, usize> {
     let mut map: HashMap<String, usize> = HashMap::new();
     for l in &gfa.links {
-        let amt = l.overlap / 2;
+        // ceil on both sides: bidirected-symmetric, and guarantees
+        // rightTrim+leftTrim ≥ overlap for every link orientation
+        // (floor here under-trims `- +` links with odd overlap by 1).
+        let amt = (l.overlap + 1) / 2;
         if !l.from_plus {
             let e = map.entry(l.from_id.clone()).or_insert(0);
             *e = (*e).max(amt);
