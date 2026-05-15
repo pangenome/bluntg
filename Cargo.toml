@@ -6,6 +6,10 @@ edition = "2024"
 [dependencies]
 flate2 = "1"
 
+[lib]
+name = "bluntg"
+path = "src/lib.rs"
+
 [[bin]]
 name = "bluntg"
 path = "src/main.rs"
